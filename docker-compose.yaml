@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  cache:
+    image: redis
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vojnic/efms1redis:rstream
+    ports:
+      - "3000:30000"
+    networks:
+      - default
