@@ -2,29 +2,23 @@ package repository
 
 import (
 	"EFms1Redis/pkg/models"
+
 	"context"
 	"encoding/json"
-	"fmt"
-	"github.com/go-redis/cache/v8"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 type GetBookRepo struct {
-	mut   sync.Mutex
 	myArr []models.Book
 }
 
+func NewGetBookRepo() *GetBookRepo {
+	return &GetBookRepo{myArr: make([]models.Book, 0)}
+}
+
 func (r *GetBookRepo) GetBook(ctx context.Context, bookName string) (models.Book, error) {
-	/*myCache := cache.New(&cache.Options{
-		Redis: r.Client,
-	})
-	book := &models.Book{}
-	err := myCache.Get(ctx, bookName, book)
-	if err != nil {
-		return *book, fmt.Errorf("redis - GetByLogin - Get: %w", err)
-	}*/
 	return r.myArr[0], nil
 }
 
@@ -46,19 +40,6 @@ func (r *GetBookRepo) ConsumeUser(c context.Context, stream string) {
 					logrus.Error(err)
 					continue
 				}
-				mycache := cache.New(&cache.Options{
-					Redis: r.Client,
-				})
-
-				err := mycache.Set(&cache.Item{
-					Ctx:   ctx,
-					Key:   book.BookName,
-					Value: book,
-				})
-				if err != nil {
-					return fmt.Errorf("redis - CreateBook - Set: %w", err)
-				}
-				return nil
 				c.Client.XDel(context.Background(), stream, element.ID)
 			}
 		}

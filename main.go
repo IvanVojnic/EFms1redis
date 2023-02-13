@@ -43,7 +43,7 @@ func main() {
 		Password: "", // no password set
 	})
 	defer rdb.Close()
-	rds := &repository.GetBookRepo{Client: *rdb}
+	rds := repository.NewGetBookRepo()
 	service := service2.NewBookSrv(rds)
 	handler := NewHandler(service)
 	e.POST("/getBook", handler.getBook)
