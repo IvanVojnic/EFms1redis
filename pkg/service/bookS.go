@@ -19,5 +19,5 @@ func NewBookSrv(repo GetBooks) *GetBookSrv {
 }
 
 func (s *GetBookSrv) GetBook(ctx context.Context, bookName string) (models.Book, error) {
-	return models.Book{}, nil
+	return s.repo.GetBook(ctx, bookName)
 }

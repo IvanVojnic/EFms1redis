@@ -2,6 +2,7 @@ package repository
 
 import (
 	"EFms1Redis/pkg/models"
+	"fmt"
 
 	"context"
 	"encoding/json"
@@ -11,24 +12,30 @@ import (
 )
 
 type GetBookRepo struct {
-	myArr []models.Book
+	myArr  []models.Book
+	Client redis.Client
 }
 
-func NewGetBookRepo() *GetBookRepo {
-	return &GetBookRepo{myArr: make([]models.Book, 0)}
+func NewGetBookRepo(client *redis.Client) *GetBookRepo {
+	return &GetBookRepo{myArr: make([]models.Book, 0), Client: *client}
 }
 
 func (r *GetBookRepo) GetBook(ctx context.Context, bookName string) (models.Book, error) {
-	return r.myArr[0], nil
+	for i := 0; i < len(r.myArr); i++ {
+		if r.myArr[i].BookName == bookName {
+			return r.myArr[i], nil
+		}
+	}
+	return models.Book{}, fmt.Errorf("element not found")
 }
 
 // ConsumeUser read user from the "example" stream and log it
-func (r *GetBookRepo) ConsumeUser(c context.Context, stream string) {
+func (r *GetBookRepo) ConsumeUser(stream string) {
 	go func() {
 		for {
 			var err error
 			var data []redis.XMessage
-			data, err = c.Client.XRangeN(context.Background(), stream, "-", "+", 1).Result()
+			data, err = r.Client.XRangeN(context.Background(), stream, "-", "+", 1).Result()
 			if err != nil {
 				logrus.Error(err)
 			}
@@ -40,7 +47,8 @@ func (r *GetBookRepo) ConsumeUser(c context.Context, stream string) {
 					logrus.Error(err)
 					continue
 				}
-				c.Client.XDel(context.Background(), stream, element.ID)
+				r.myArr = append(r.myArr, *book)
+				r.Client.XDel(context.Background(), stream, element.ID)
 			}
 		}
 	}()

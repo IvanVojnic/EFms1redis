@@ -11,7 +11,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type GetBooks interface {
@@ -25,13 +25,13 @@ type Handler struct {
 func main() {
 	e := echo.New()
 
-	logger := log.New()
+	logger := logrus.New()
 	logger.Out = os.Stdout
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogURI:    true,
 		LogStatus: true,
 		LogValuesFunc: func(c echo.Context, values middleware.RequestLoggerValues) error {
-			log.WithFields(log.Fields{
+			logrus.WithFields(logrus.Fields{
 				"URI":    values.URI,
 				"status": values.Status,
 			}).Info("request")
@@ -42,16 +42,32 @@ func main() {
 		Addr:     "localhost:6379",
 		Password: "", // no password set
 	})
+
+	st := rdb.Ping(context.Background())
+	if st.Err() != nil {
+		logrus.Fatal()
+	}
+
 	defer rdb.Close()
-	rds := repository.NewGetBookRepo()
+	rds := repository.NewGetBookRepo(rdb)
+	rds.ConsumeUser("example")
 	service := service2.NewBookSrv(rds)
 	handler := NewHandler(service)
-	e.POST("/getBook", handler.getBook)
+	e.GET("/getBook", handler.getBook)
 	e.Logger.Fatal(e.Start(":30000"))
 }
 
 func (h *Handler) getBook(c echo.Context) error {
-	return echo.NewHTTPError(http.StatusBadRequest, "failed...")
+	bookName := c.QueryParam("name")
+	book, err := h.serviceBook.GetBook(c.Request().Context(), bookName)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"Error get book": err,
+			"book":           book,
+		}).Info("GET BOOK request")
+		return echo.NewHTTPError(http.StatusBadRequest, "cannot get book")
+	}
+	return c.JSON(http.StatusOK, book)
 }
 
 func NewHandler(serviceBook GetBooks) *Handler {
