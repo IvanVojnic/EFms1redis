@@ -29,8 +29,8 @@ func (r *GetBookRepo) GetBook(ctx context.Context, bookName string) (models.Book
 	return models.Book{}, fmt.Errorf("element not found")
 }
 
-// ConsumeUser read user from the "example" stream and log it
-func (r *GetBookRepo) ConsumeUser(stream string) {
+// ConsumeBook read user from the "example" stream and log it
+func (r *GetBookRepo) ConsumeBook(stream string) {
 	go func() {
 		for {
 			var err error
