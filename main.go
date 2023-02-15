@@ -91,6 +91,7 @@ func consumer(ch chan int) {
 			"Error connection to database rep.NewPostgresDB()": errKafka,
 		}).Fatal("DB ERROR CONNECTION")
 	}
+
 	kafkaReader := repository.NewKafkaConn(conn)
 	err := kafkaReader.CreateBookKafka()
 	if err != nil {
