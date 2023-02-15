@@ -24,7 +24,6 @@ type Handler struct {
 
 func main() {
 	e := echo.New()
-
 	logger := logrus.New()
 	logger.Out = os.Stdout
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
