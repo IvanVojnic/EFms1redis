@@ -3,6 +3,7 @@ package main
 import (
 	"EFms1Redis/pkg/models"
 	"EFms1Redis/pkg/repository"
+	service2 "EFms1Redis/pkg/service"
 	"context"
 	"github.com/go-redis/redis/v8"
 	"github.com/segmentio/kafka-go"
@@ -16,6 +17,7 @@ import (
 
 type GetBooks interface {
 	GetBook(ctx context.Context, bookName string) (models.Book, error)
+	GetBookFromMs(ctx context.Context, name string) (models.Book, error)
 }
 
 type Handler struct {
@@ -50,19 +52,37 @@ func main() {
 	defer rdb.Close()
 	rds := repository.NewGetBookRepo(rdb)
 	rds.ConsumeBook("example")
+	network := "tcp"
+	address := "127.0.0.1:9092"
+	topic := "myTopic"
+	partition := 0
+	conn, errKafka := kafka.DialLeader(context.Background(), network, address, topic, partition)
+	if errKafka != nil {
+		logrus.WithFields(logrus.Fields{
+			"Error connection to database rep.NewPostgresDB()": errKafka,
+		}).Fatal("DB ERROR CONNECTION")
+	}
+	kafkaConn := repository.NewKafkaConn(conn)
+	go consumer(kafkaConn)
 
-	ch := make(chan int, 1)
-	consumer(ch)
+	service := service2.NewBookSrv(rds, kafkaConn)
+	handler := NewHandler(service)
+	e.GET("/getBook", handler.getBook)
+	e.Logger.Fatal(e.Start(":30000"))
+}
 
-	//service := service2.NewBookSrv(rds)
-	//handler := NewHandler(service)
-	//e.GET("/getBook", handler.getBook)
-	//e.Logger.Fatal(e.Start(":30000"))
+func consumer(con *repository.KafkaConn) {
+	err := con.CreateBookKafka()
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"Error save book by kafka": err,
+		}).Info("save book request")
+	}
 }
 
 func (h *Handler) getBook(c echo.Context) error {
 	bookName := c.QueryParam("name")
-	book, err := h.serviceBook.GetBook(c.Request().Context(), bookName)
+	book, err := h.serviceBook.GetBookFromMs(c.Request().Context(), bookName)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"Error get book": err,
@@ -76,26 +96,5 @@ func (h *Handler) getBook(c echo.Context) error {
 func NewHandler(serviceBook GetBooks) *Handler {
 	return &Handler{
 		serviceBook: serviceBook,
-	}
-}
-
-func consumer(ch chan int) {
-	network := "tcp"
-	address := "127.0.0.1:9092"
-	topic := "myTopic"
-	partition := 0
-	conn, errKafka := kafka.DialLeader(context.Background(), network, address, topic, partition)
-	if errKafka != nil {
-		logrus.WithFields(logrus.Fields{
-			"Error connection to database rep.NewPostgresDB()": errKafka,
-		}).Fatal("DB ERROR CONNECTION")
-	}
-
-	kafkaReader := repository.NewKafkaConn(conn)
-	err := kafkaReader.CreateBookKafka()
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"Error save book by kafka": err,
-		}).Info("save book request")
 	}
 }
