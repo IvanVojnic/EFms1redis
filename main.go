@@ -4,14 +4,18 @@ import (
 	"EFms1Redis/pkg/models"
 	"EFms1Redis/pkg/repository"
 	service2 "EFms1Redis/pkg/service"
+	"encoding/json"
+
 	"context"
-	"github.com/go-redis/redis/v8"
-	"github.com/segmentio/kafka-go"
+	"log"
 	"net/http"
 	"os"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/segmentio/kafka-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -65,6 +69,50 @@ func main() {
 	kafkaConn := repository.NewKafkaConn(conn)
 	go consumer(kafkaConn)
 
+	connRMQ, err := amqp.Dial("amqp://rabbit:rabbit@localhost:5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer connRMQ.Close()
+
+	chRMQ, err := connRMQ.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer chRMQ.Close()
+
+	q, err := chRMQ.QueueDeclare(
+		"hello", // name
+		false,   // durable
+		false,   // delete when unused
+		false,   // exclusive
+		false,   // no-wait
+		nil,     // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+	msgs, err := chRMQ.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	failOnError(err, "Failed to register a consumer")
+
+	var forever chan struct{}
+
+	go func() {
+		for d := range msgs {
+			var book models.Book
+			err := json.Unmarshal(d.Body, &book)
+			if err != nil {
+				log.Panicf("error while getting a book, %s", err)
+			}
+			log.Printf("Received a message: %s, %v, %v", book.BookName, book.BookNew, book.BookYear)
+		}
+	}()
+
+	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+	<-forever
+
 	service := service2.NewBookSrv(rds, kafkaConn)
 	handler := NewHandler(service)
 	e.GET("/getBook", handler.getBook)
@@ -96,5 +144,11 @@ func (h *Handler) getBook(c echo.Context) error {
 func NewHandler(serviceBook GetBooks) *Handler {
 	return &Handler{
 		serviceBook: serviceBook,
+	}
+}
+
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Panicf("%s: %s", msg, err)
 	}
 }
